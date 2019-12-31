@@ -1,3 +1,6 @@
+mod disk;
+mod fs;
+
 #[cfg(test)]
 mod tests {
     #[test]
