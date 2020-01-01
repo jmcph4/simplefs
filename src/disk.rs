@@ -101,6 +101,7 @@ impl Disk for BlockDisk {
 
         let mut write_data: Vec<u8> = data.clone();
         write_data.truncate(BLOCK_SIZE);
+        write_data.extend(vec![0;BLOCK_SIZE - (write_data.len() % BLOCK_SIZE)]);
 
         match self.file_handle.write(&write_data[..]) {
             Ok(_n) => {},
