@@ -1,6 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Seek, SeekFrom};
 
+#[derive(Debug)]
 pub enum DiskError {
     ImageOpenFailure,
     ImageReadFailure,
@@ -23,6 +24,7 @@ pub trait Disk where Self: Sized{
         Result<(), DiskError>;
 }
 
+#[derive(Debug)]
 pub struct BlockDisk {
     file_handle: File,
     num_blocks: usize,
