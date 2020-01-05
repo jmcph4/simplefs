@@ -188,7 +188,8 @@ impl FileSystem<BlockDisk> for SimpleFileSystem<BlockDisk> {
     }
 
     fn stat(&self, inumber: usize) -> Result<usize, FileSystemError> {
-        unimplemented!();
+        let inode: Inode = self.get_inode(inumber)?;
+        Ok(inode.size as usize)
     }
 
     fn read(&mut self, inumber: usize, data: &mut Vec<u8>, offset: usize) ->
