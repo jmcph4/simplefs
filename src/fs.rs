@@ -91,8 +91,50 @@ impl FileSystem<BlockDisk> for SimpleFileSystem<BlockDisk> {
         Ok(())
     }
 
-    fn mount(disk: BlockDisk) -> Result<Self, FileSystemError> {
-        unimplemented!();
+    fn mount(mut disk: BlockDisk) -> Result<Self, FileSystemError> {
+        /* read first block from disk as this contains the superblock */
+        let first_block: Vec<u8> = match disk.read(0) {
+            Ok(bytes) => bytes,
+            Err(_e) => return Err(FileSystemError::DiskReadFailure)
+        };
+
+        /* extract superblock from the first disk block */
+        let superblock: Superblock =
+            match bincode::deserialize(&first_block[..15]) {
+            Ok(block) => block,
+            Err(_e) => return Err(FileSystemError::MiscellaneousFailure)
+        };
+
+        /* validate superblock by checking for magic number */
+        if superblock.magic != MAGIC_NUMBER {
+            return Err(FileSystemError::InvalidSuperblock);
+        }
+
+        let inode_block: Vec<u8> = match disk.read(1) {
+            Ok(bytes) => bytes,
+            Err(_e) => return Err(FileSystemError::DiskReadFailure)
+        };
+
+        /* allocate space for free block bitmap */
+        let bitmap: Vec<bool> = vec![true; disk.size()];
+
+        /* construct filesystem type */
+        let mut filesystem: SimpleFileSystem<BlockDisk> = SimpleFileSystem {
+            disk: disk,
+            inode_block: inode_block,
+            bitmap: bitmap
+        };
+
+        /* scan filesystem looking for free blocks */
+        for i in 0..(BLOCK_SIZE/INODE_SIZE) {
+            let inode: Inode = filesystem.get_inode(i)?;
+
+            for j in 0..POINTERS_PER_INODE {
+                filesystem.bitmap[inode.direct[j as usize] as usize] = false;
+            }
+        }
+
+        Ok(filesystem)
     }
 
     fn create(&mut self) -> Result<usize, FileSystemError> {
@@ -167,6 +209,39 @@ impl SimpleFileSystem<BlockDisk> {
         }
     }
 
+    fn get_inode(&self, inumber: usize) -> Result<Inode, FileSystemError> {
+        let inode_block: &Vec<u8> = &self.inode_block;
+
+        for i in (0..BLOCK_SIZE).step_by(INODE_SIZE) {
+            if i == inumber {
+                let inode: Inode = Inode {
+                    valid: SimpleFileSystem::slice_to_u32(
+                               &inode_block[i..i+4].try_into().unwrap()),
+                    size: SimpleFileSystem::slice_to_u32(
+                        &inode_block[i+4..i+8].try_into().unwrap()),
+                    direct: [
+                        SimpleFileSystem::slice_to_u32(
+                            &inode_block[i+8..i+12].try_into().unwrap()),
+                        SimpleFileSystem::slice_to_u32(
+                            &inode_block[i+12..i+16].try_into().unwrap()),
+                        SimpleFileSystem::slice_to_u32(
+                            &inode_block[i+16..i+20].try_into().unwrap()),
+                        SimpleFileSystem::slice_to_u32(
+                            &inode_block[i+20..i+24].try_into().unwrap()),
+                        SimpleFileSystem::slice_to_u32(
+                            &inode_block[i+24..i+28].try_into().unwrap())
+                    ],
+                    indirect: SimpleFileSystem::slice_to_u32(
+                        &inode_block[i+28..i+i+32].try_into().unwrap())
+                };
+
+                return Ok(inode);
+            }
+        }
+
+        Err(FileSystemError::MiscellaneousFailure)
+    }
+    
     fn slice_to_u32(bytes: &[u8;4]) -> u32 {
         ((bytes[0] as u32) << 24) |
             ((bytes[1] as u32) << 16) |
