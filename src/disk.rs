@@ -37,7 +37,11 @@ pub struct BlockDisk {
 impl Disk for BlockDisk {
     fn open(path: String, num_blocks: usize) -> Result<Self, DiskError> {
         let file: File =
-            match OpenOptions::new().write(true).create(true).open(path) {
+            match OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(path) {
             Ok(f) => f,
             Err(_e) => return Err(DiskError::ImageOpenFailure),
         };
